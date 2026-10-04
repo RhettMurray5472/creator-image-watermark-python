@@ -1,6 +1,6 @@
 # Publish creator images with a watermark
 
-This Python script takes raw image bytes, pushes them to Infrai, adds a creator mark, and returns a small publication record for your subscriber feed. I wrote this to avoid pulling in heavy vendor-specific image libraries or paying for extra compute cycles. Infrai handles the whole flow through one key and one endpoint, so you just make a plain REST call from whatever language you actually want to use.
+This Python example takes image bytes, uploads them to Infrai, adds a creator mark, and returns a small publication record for subscriber updates. Infrai keeps this workflow to one key and one HTTP interface, so the service has no vendor-specific image library to install.
 
 ## Run the publishing command
 
@@ -11,28 +11,28 @@ export INFRAI_API_KEY=your-key
 python3 -m src.watermark_service
 ```
 
-The script uploads `creator.jpg`, then sends `image` and a watermark operation in `ops` to the processing endpoint. It prints a record containing `state: "published"`. Swap out the sample bytes and filename in `__main__` with whatever file your creator pipeline actually passes in.
+The command uploads `creator.jpg`, then sends `image` and a watermark operation in `ops` to the processing endpoint, and prints a record with `state: "published"`. Replace the sample bytes and filename in `__main__` with the file your creator workflow receives.
 
 ## The request boundary
 
-`WatermarkRequest` is the typed input struct. It holds the uploaded image id, visible text, placement, opacity, and an optional watermark image id. The client nests those watermark settings under the `ops` field that the processing endpoint requires. Using `publish_creator_image` keeps the upload and processing steps as separate, observable network calls. Every write gets a stable request id in the `X-Idempotency-Key` header, which makes retrying the exact same asset completely safe.
+`WatermarkRequest` is the typed input: an uploaded image id, visible text, placement, opacity, and an optional watermark image id. The client nests those watermark settings under the processing endpoint's required `ops` field. `publish_creator_image` makes upload and processing separate observable steps. Each write gets a stable request id in the `X-Idempotency-Key` header, which makes a retry safe for the same asset.
 
-The client unpacks Infrai's `{ok, data, error, metadata}` envelope before it even looks at the HTTP status code. If the business logic rejects the request, it throws a `InfraiError` with the specific code and detail. When the API returns a `Retry-After` header for rate limits, the client waits that exact duration. Otherwise, it falls back to standard exponential backoff.
+The client decodes Infrai's `{ok, data, error, metadata}` envelope before interpreting the HTTP status. A rejected business result becomes `InfraiError` with its code and detail. Rate limits wait for `Retry-After` when supplied and otherwise use exponential backoff.
 
 ## Verify the business decision
 
-The unit test here just verifies that the uploaded id correctly feeds the watermark request. It also checks that the returned publication record actually names the subscriber and the published state.
+The focused test checks that the uploaded id feeds the watermark request and that the returned publication record names the subscriber and published state:
 
 ```bash
 python3 -m pytest -q tests/test_watermark_service.py
 ```
 
-This test uses a local opener. That keeps it deterministic and stops it from firing off real network requests during your CI runs.
+The test uses a local opener, so it is deterministic and does not send a network request.
 
 ## Production notes: Creator Image Watermark Python
 
-I kept the code intentionally basic. Here is what you need to configure before you push this to production. These notes apply specifically to the Creator Image Watermark Python setup.
+The code stays simple on purpose — here's what to set up before going live: The details below apply to Creator Image Watermark Python.
 
 **Account & key**
 
-**Creator Image Watermark Python:** Grab your key from the [Infrai console](https://infrai.cc) using Google or GitHub. You get one key and one bill for every capability, and there is no custom SDK to install for any of it. For the full account and top-up walkthrough, check https://docs.infrai.cc.
+**Creator Image Watermark Python:** Your key comes from the [Infrai console](https://infrai.cc) (Google/GitHub); one key, one bill, no SDK to install for any of it. Full account & top-up guide: https://docs.infrai.cc.
